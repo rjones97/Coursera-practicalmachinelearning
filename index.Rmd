@@ -7,26 +7,104 @@ output: html_document
 
 Note: Initial setup from  https://github.com/lgreski/datasciencectacontent/blob/master/markdown/pml-ghPagesSetup.md has been very helpful.
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# Instructions
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The training data for this project are available here:
+ https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+ https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+# Environment Setup
+```{r EnvironmentSetup}
+library(caret)
+library(randomForest)
+library(lattice)
+library(ggplot2)
+library(rpart)
+library(rpart.plot)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+# Data Setup
+## Load Data
+We want to load the data from provided sources.
+```{r DataSetup.LoadData}
+# Gather URLs for the training and testing data
+urlTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+urlTest <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+# TRAINING DATA
+# If file does not exist, download and read in converting unuseful data to NAs
+csvTraining <- "pml-training.csv"
 
-```{r cars}
-summary(cars)
+if (file.exists(csvTraining)) {
+        training <- read.csv(csvTraining, na.strings=c("NA","#DIV/0!",""))
+} else { 
+        download.file(urlTrain,csvTraining)
+        training <- read.csv(csvTraining, na.strings=c("NA","#DIV/0!",""))
+        }                           
+
+# TESTING DATA
+# Repeat the process above for Testing Data
+csvTesting <-  "pml-testing.csv"
+
+if (file.exists(csvTesting)) {
+        testing <- read.csv(csvTesting, na.strings=c("NA","#DIV/0!",""))
+} else { 
+        download.file(urlTest,csvTesting)
+        testing <- read.csv(csvTesting, na.strings=c("NA","#DIV/0!",""))
+}   
+
+# INSPECT THE DATA
+#dim(training); dim(testing);
+#names(training); names(testing);
+#summary(training); summary(testing);
+#head(training); head(testing);
+#str(training); head(testing);
+
 ```
 
-## Including Plots
+## Cleanse & Prepare Data
+Now that the data is loaded, we want to cleanse it - removing unnecessary data.
+```{r DataSetup.Cleanse}
+    # Identify initial number of columns in the dataset
+    dim(training)[2]
 
-You can also embed plots, for example:
+# Remove any columns that contain no data
+training <- training[,colSums(is.na(training)) == 0]
+testing <- testing[,colSums(is.na(testing)) == 0]
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+    # Verify we removed columns.  60 should remain
+    dim(training)[2]
+
+# Remove columns that are unrelated to the evaluation: X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window (columns 1-7)
+training <- training[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+
+    # Verify datasets.
+    dim(training)[2]; dim(testing)[2]
+    #names(training)
+    head(training)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Now that the data has been cleansed, we need to prepare the data, subsetting the training data into training and testing sets; setting the provided testing set asside for final analysis.
+```{r DataSetup.Prep}
+set.seed(4321)
+inTrain <- createDataPartition(y=training$classe, p=0.7, list = FALSE)
+sub_training <- training[inTrain,]
+sub_testing <- training[-inTrain,]
+
+# Look at the 5 levels of Classe
+plot(sub_training$classe, col="red", main="Frequency of CLASSE values in Training Data", xlab="classe", ylab="Frequency")
+```
+
