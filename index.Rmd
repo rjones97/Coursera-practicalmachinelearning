@@ -1,7 +1,7 @@
 ---
 title: "Practical Machine Learning Course Project"
 author: "Rachel Jones"
-date: "January 17, 2017"
+date: "January 27, 2017"
 output: html_document
 ---
 
@@ -76,26 +76,32 @@ if (file.exists(csvTesting)) {
 ## Cleanse & Prepare Data
 Now that the data is loaded, we want to cleanse it - removing unnecessary data.
 ```{r DataSetup.Cleanse}
-    # Identify initial number of columns in the dataset
-    dim(training)[2]
-
 # Remove any columns that contain no data
 training <- training[,colSums(is.na(training)) == 0]
 testing <- testing[,colSums(is.na(testing)) == 0]
 
-    # Verify we removed columns.  60 should remain
-    dim(training)[2]
+# Remove columns that are unrelated to the evaluation: 
+    # X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, 
+    # cvtd_timestamp, new_window, num_window (columns 1-7)
 
-# Remove columns that are unrelated to the evaluation: X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window (columns 1-7)
 training <- training[,-c(1:7)]
 testing <- testing[,-c(1:7)]
 
-    # Verify datasets.
-    dim(training)[2]; dim(testing)[2]
-    #names(training)
-    head(training)
-
 ```
+
+Inspect the data.
+```{r DataSetup.Inspect,results='hide',eval=FALSE}
+# Inspecting the final data now that cleansing is complete
+dim(training); dim(testing);
+names(training); names(testing);
+summary(training); summary(testing);
+head(training); head(testing);
+str(training); head(testing);
+
+# Note: output has been suppressed
+```
+
+
 
 Now that the data has been cleansed, we need to prepare the data, subsetting the training data into training and testing sets; setting the provided testing set asside for final analysis.
 ```{r DataSetup.Prep}
@@ -106,5 +112,62 @@ sub_testing <- training[-inTrain,]
 
 # Look at the 5 levels of Classe
 plot(sub_training$classe, col="red", main="Frequency of CLASSE values in Training Data", xlab="classe", ylab="Frequency")
+```
+
+# Train and Predict
+Because we don't know which models will perform best at predicting the outcomes, several models will be used for analysis.
+
+## Training Models
+
+```{r Training}
+timestamp()
+model_rf    <- train(classe ~., data = sub_training, method="rf")
+timestamp()
+model_lda   <- train(classe ~., data = sub_training, method="lda")
+timestamp()
+model_gbm   <- train(classe ~., data = sub_training, method="gbm")
+timestamp()
+model_rpart <- train(classe ~., data = sub_training, method="rpart")
+timestamp()
+
+```
+
+```{r}
+rpart.plot(model_rpart$finalModel,main="Classification Tree", extra=102, under=TRUE)
+```
+
+## Predicting Models
+Using the generated models, we supply the subset of testing data to establish predictions.
+```{r Predict}
+predict_rf <- predict(model_rf, newdata=sub_testing)
+predict_lda <- predict(model_lda, newdata=sub_testing)
+predict_gbm <- predict(model_gbm, newdata=sub_testing)
+predict_rpart <- predict(model_rpart, newdata=sub_testing)
+```
+
+Using the predictions generated for each of the models, we can analyze the accuracy between the varying models and identify if one model is sufficient, or if we should attempt to combine multiple models.
+```{r Prediction.Accuracy}
+# Random Forest (RF)
+confusionMatrix(sub_testing$classe,predict_rf)
+
+# Linear Discriminate Analysis (LDA)
+confusionMatrix(sub_testing$classe,predict_lda)
+
+# Generalized Boosted Model (GBM)
+confusionMatrix(sub_testing$classe,predict_gbm)
+
+# Decision Tree (RPart)
+confusionMatrix(sub_testing$classe,predict_rpart)
+```
+
+
+
+# Summary
+Comparing the results from each of the model predictions, the **Random Forest model stands out clearly** as the most accurate model.  With **99.5% accuracy** and an **out-of-sample error rate of 0.5%** (calculated as [1-Accuracy]), we expect very little missclassification in the final predictions of the provided test set using the **Random Forest Model**.
+
+## Final Predictions
+```{r}
+predict_final <- predict(model_rf, newdata=testing)
+predict_final
 ```
 
